@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- First npm-published build. 0.1.0 was superseded before publication because
+  npm 9 created an unapprovable staged placeholder during the initial release.
+- No functional changes from 0.1.0.
+
 ## 0.1.0
 
 First release.
