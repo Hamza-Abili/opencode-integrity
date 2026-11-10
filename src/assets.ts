@@ -92,7 +92,7 @@ export async function resolvePluginRoot(
   }
 }
 
-async function entryText(root: string): Promise<string> {
+async function entryText(root: string, realRoot: string): Promise<string> {
   const manifest = await readJsonFileCapped<Record<string, unknown>>(packageJsonPath(root));
   const candidates = new Set<string>();
   if (typeof manifest?.main === "string") candidates.add(manifest.main);
@@ -114,7 +114,7 @@ async function entryText(root: string): Promise<string> {
     const path = join(root, candidate);
     if (!isInside(root, path)) continue;
     const real = await realpath(path).catch(() => undefined);
-    if (real === undefined || !isInside(root, real)) continue;
+    if (real === undefined || !isInside(realRoot, real)) continue;
     const text = await readTextFileCapped(real);
     if (text !== undefined) return text;
   }
@@ -135,14 +135,15 @@ export async function pluginAsset(
     };
   }
   const realRoot = await realpath(root).catch(() => root);
-  if (!allowOutside && !isInside(directory, realRoot)) {
+  const realDirectory = await realpath(directory).catch(() => directory);
+  if (!allowOutside && !isInside(realDirectory, realRoot)) {
     return { warning: `${id}: local plugin resolves outside the project and was ignored` };
   }
   const manifest = await readJsonFileCapped<Record<string, unknown>>(packageJsonPath(realRoot));
   const version =
     ref.version ?? (typeof manifest?.version === "string" ? manifest.version : undefined);
   const content = await hashDirectory(root);
-  const text = await entryText(root);
+  const text = await entryText(root, realRoot);
   return {
     asset: {
       source: ref.target,
