@@ -1,0 +1,72 @@
+{
+  "name": "@hamzaabili/opencode-integrity",
+  "version": "0.1.0",
+  "description": "Lock what your OpenCode agent can load: MCP tool definitions, skills and plugins. Detect drift, tool poisoning and rug pulls at runtime. Zero runtime dependencies, V1+V2.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Hamza-Abili",
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "opencode-v1",
+    "opencode-v2",
+    "mcp",
+    "mcp-security",
+    "tool-poisoning",
+    "rug-pull",
+    "supply-chain",
+    "integrity",
+    "lockfile",
+    "skills",
+    "security"
+  ],
+  "homepage": "https://github.com/Hamza-Abili/opencode-integrity#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hamza-Abili/opencode-integrity.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Hamza-Abili/opencode-integrity/issues"
+  },
+  "main": "./index.ts",
+  "types": "./src/index.ts",
+  "bin": {
+    "opencode-integrity": "./dist/cli.mjs"
+  },
+  "oc-plugin": [
+    "server"
+  ],
+  "exports": {
+    ".": "./index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "scripts",
+    "index.ts",
+    "dist/cli.mjs",
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "bun test",
+    "build": "bun run scripts/build.ts",
+    "ci": "bun run lint && bun run typecheck && bun run test && bun run build && bun run smoke",
+    "smoke": "bun scripts/smoke.ts",
+    "prepack": "bun run build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.6",
+    "@types/bun": "^1.4.4",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "bun": ">=1.1.0",
+    "opencode": ">=1.19.5 <2 || >=2.2.1"
+  }
+}

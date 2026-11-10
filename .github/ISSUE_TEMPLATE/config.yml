@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or design discussion
+    url: https://github.com/Hamza-Abili/opencode-integrity/discussions
+    about: Ask for help, discuss a lockfile layout, or review a drift policy.
+  - name: Security report
+    url: https://github.com/Hamza-Abili/opencode-integrity/security/advisories/new
+    about: Report a bypass or secret leak privately. Do not open a public issue.

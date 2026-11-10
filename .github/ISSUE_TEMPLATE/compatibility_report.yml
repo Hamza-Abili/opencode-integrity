@@ -1,0 +1,56 @@
+name: Compatibility or false positive
+description: A tool/skill is flagged incorrectly, or drift is missed
+title: "compat: "
+labels: ["compatibility", "needs reproduction"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        False positives and false negatives are important. Include the smallest
+        redacted descriptor or skill that reproduces it.
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: opencode-version
+    attributes:
+      label: OpenCode version
+      placeholder: "2.2.6"
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - False positive (clean asset flagged)
+        - False negative (change not detected)
+        - Capability heuristic
+        - Suspicious-content heuristic
+        - V1 limitation
+    validations:
+      required: true
+  - type: input
+    id: asset
+    attributes:
+      label: Asset id
+      placeholder: "mcp:server_name or skill:id"
+    validations:
+      required: true
+  - type: textarea
+    id: descriptor
+    attributes:
+      label: Redacted descriptor or skill excerpt
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true

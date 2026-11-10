@@ -1,0 +1,61 @@
+name: Bug report
+description: Audit, lock, check or runtime enforcement does not work
+title: "bug: "
+labels: ["bug", "needs reproduction"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste tokens, private MCP URLs, full environment dumps or private
+        skill content. Redact values; hashes and diff labels are enough.
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: opencode-version
+    attributes:
+      label: OpenCode version and generation
+      placeholder: "2.2.6 (V2)"
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - warn
+        - enforce
+        - CLI only
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - audit / lock
+        - check / SARIF / policy
+        - runtime MCP tool capture
+        - runtime enforcement
+        - plugin hashing
+        - skill scanning
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Command or audit output
+      description: Redact secrets and private URLs.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
