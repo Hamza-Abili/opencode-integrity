@@ -6,6 +6,7 @@ import { pluginAssetKey } from "../src/config.ts";
 import { createLockfile, readLockfile } from "../src/lockfile.ts";
 import { generatePolicy } from "../src/policy.ts";
 import type { Assets } from "../src/types.ts";
+import { realPath } from "../src/util.ts";
 import { localPlugin, project, tempDir, writeJson, writeText } from "./helpers.ts";
 
 async function fixture() {
@@ -130,10 +131,11 @@ describe("collectStaticAssets", () => {
       include: ["plugins"],
       resolvePlugin: (source) => result.policyTargets.get(source) ?? source,
     });
-    for (const target of [linked, directory]) {
+    const lexical = join(linked, "plugins", "demo-plugin");
+    for (const target of [lexical, realPath(lexical)]) {
       expect(policies).toContainEqual({
         action: "plugin.use",
-        resource: join(target, "plugins", "demo-plugin"),
+        resource: target,
         effect: "allow",
       });
     }
