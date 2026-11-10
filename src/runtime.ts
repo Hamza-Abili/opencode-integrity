@@ -1,16 +1,10 @@
 import { dirname } from "node:path";
-import {
-  mcpConfigAsset,
-  mcpToolsForServer,
-  pluginAsset,
-  pluginIDFromRuntime,
-  skillAssetFromInfo,
-} from "./assets.ts";
+import { mcpConfigAsset, mcpToolsForServer, pluginAsset, skillAssetFromInfo } from "./assets.ts";
 import { filterAssets, filterIgnored } from "./audit.ts";
-import { loadGlobalMcp, loadProjectConfig } from "./config.ts";
+import { loadGlobalMcp, loadProjectConfig, pluginAssetKey } from "./config.ts";
 import { audit, createLockfile, readLockfile, writeLockfile } from "./lockfile.ts";
 import type { Assets, AuditResult, Lockfile, Options } from "./types.ts";
-import { hashDirectory, isInside } from "./util.ts";
+import { hashDirectory, isInside, isInsideReal } from "./util.ts";
 import { VERSION as PLUGIN_VERSION } from "./version.ts";
 
 export interface RuntimeContext {
@@ -85,8 +79,6 @@ export async function collectRuntime(
   const plugins: Record<string, Assets["plugins"][string]> = {};
 
   for (const entry of runtime.plugins) {
-    const id = pluginIDFromRuntime(entry);
-    if (id === undefined) continue;
     const source = object(object(entry).source);
     const ref =
       source.type === "local" && typeof source.path === "string"
@@ -98,12 +90,13 @@ export async function collectRuntime(
             }
           : undefined;
     if (ref === undefined) continue;
+    const id = pluginAssetKey(ref, directory);
     const included =
       includeGlobal ||
       projectTargets.has(ref.target) ||
       (source.type === "local" &&
         typeof source.path === "string" &&
-        isInside(directory, source.path));
+        isInsideReal(directory, source.path));
     if (!included) continue;
     const result = await pluginAsset(id, ref, directory, home, includeGlobal);
     if (result.asset !== undefined) plugins[id] = result.asset;

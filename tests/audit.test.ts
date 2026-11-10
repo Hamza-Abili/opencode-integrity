@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { collectStaticAssets, filterIgnored, mergeRuntimeTools } from "../src/audit.ts";
+import { pluginAssetKey } from "../src/config.ts";
 import { createLockfile, readLockfile } from "../src/lockfile.ts";
+import { generatePolicy } from "../src/policy.ts";
 import type { Assets } from "../src/types.ts";
-import { localPlugin, project, writeJson, writeText } from "./helpers.ts";
+import { localPlugin, project, tempDir, writeJson, writeText } from "./helpers.ts";
 
 async function fixture() {
   const { directory, home } = await project();
@@ -48,6 +51,102 @@ describe("collectStaticAssets", () => {
       includeGlobal: true,
     });
     expect(withGlobal.assets.mcp.global).toBeDefined();
+  });
+
+  test("resolves relative plugin targets for policy", async () => {
+    const { directory, home } = await project();
+    await localPlugin(directory);
+    await writeJson(join(directory, "opencode.json"), { plugins: ["./plugins/demo-plugin"] });
+    const result = await collectStaticAssets(directory, home);
+    expect(result.policyTargets.get("./plugins/demo-plugin")).toContain(
+      join(directory, "plugins", "demo-plugin")
+    );
+
+    const dotConfig = await project();
+    await localPlugin(join(dotConfig.directory, ".opencode"));
+    await writeJson(join(dotConfig.directory, ".opencode", "opencode.json"), {
+      plugins: ["./plugins/demo-plugin"],
+    });
+    const dotResult = await collectStaticAssets(dotConfig.directory, dotConfig.home);
+    expect(Object.keys(dotResult.assets.plugins)).toEqual(["./.opencode/plugins/demo-plugin"]);
+    expect(dotResult.policyTargets.get("./.opencode/plugins/demo-plugin")).toContain(
+      join(dotConfig.directory, ".opencode", "plugins", "demo-plugin")
+    );
+  });
+
+  test("keeps distinct relative plugins declared by both config files", async () => {
+    const { directory, home } = await project();
+    await writeJson(join(directory, "plugins", "demo-plugin", "package.json"), {
+      name: "root-plugin",
+      version: "1.0.0",
+    });
+    await writeText(join(directory, "plugins", "demo-plugin", "index.ts"), "export default {};\n");
+    await writeJson(join(directory, ".opencode", "plugins", "demo-plugin", "package.json"), {
+      name: "dot-plugin",
+      version: "1.0.0",
+    });
+    await writeText(
+      join(directory, ".opencode", "plugins", "demo-plugin", "index.ts"),
+      "export default {};\n"
+    );
+    await writeJson(join(directory, "opencode.json"), {
+      plugins: ["./plugins/demo-plugin"],
+    });
+    await writeJson(join(directory, ".opencode", "opencode.json"), {
+      plugins: ["./plugins/demo-plugin"],
+    });
+    const result = await collectStaticAssets(directory, home);
+    expect(Object.keys(result.assets.plugins).sort()).toEqual([
+      "./.opencode/plugins/demo-plugin",
+      "./plugins/demo-plugin",
+    ]);
+    expect(result.policyTargets.size).toBe(2);
+  });
+
+  test("uses real paths for project-relative keys", async () => {
+    const { directory } = await project();
+    const plugin = await localPlugin(directory);
+    const parent = await tempDir("oi-link-");
+    const linked = join(parent, "project");
+    await symlink(directory, linked);
+    expect(pluginAssetKey({ target: plugin }, linked)).toBe("./plugins/demo-plugin");
+    expect(pluginAssetKey({ target: "./plugins/demo-plugin", configDir: linked }, linked)).toBe(
+      "./plugins/demo-plugin"
+    );
+  });
+
+  test("policy allows both lexical and real local targets", async () => {
+    const { directory, home } = await project();
+    await localPlugin(directory);
+    await writeJson(join(directory, "opencode.json"), {
+      plugins: ["./plugins/demo-plugin"],
+    });
+    const parent = await tempDir("oi-link-");
+    const linked = join(parent, "project");
+    await symlink(directory, linked);
+    const result = await collectStaticAssets(linked, home);
+    const { policies } = generatePolicy(result.assets, {
+      denyUnlisted: true,
+      include: ["plugins"],
+      resolvePlugin: (source) => result.policyTargets.get(source) ?? source,
+    });
+    for (const target of [linked, directory]) {
+      expect(policies).toContainEqual({
+        action: "plugin.use",
+        resource: join(target, "plugins", "demo-plugin"),
+        effect: "allow",
+      });
+    }
+  });
+
+  test("does not crash on a malformed file URL", async () => {
+    const { directory, home } = await project();
+    await writeJson(join(directory, "opencode.json"), {
+      plugins: ["file://bad host/x"],
+    });
+    const result = await collectStaticAssets(directory, home);
+    expect(result.assets.plugins).toEqual({});
+    expect(result.warnings.some((warning) => warning.includes("not installed"))).toBe(true);
   });
 
   test("rejects a local plugin outside the project", async () => {
@@ -152,9 +251,69 @@ describe("cli", () => {
     const sarif = await run(["check", ...base, "--format", "sarif"]);
     expect(JSON.parse(sarif.stdout).version).toBe("2.1.0");
 
-    const policy = await run(["policy", ...base]);
-    const parsed = JSON.parse(policy.stdout) as { policies: Array<{ action: string }> };
+    const policy = await run(["policy", ...base, "--deny-unlisted"]);
+    const parsed = JSON.parse(policy.stdout) as {
+      policies: Array<{ action: string; effect: string }>;
+    };
     expect(parsed.policies.some((entry) => entry.action === "skill.use")).toBe(true);
+    expect(parsed.policies.some((entry) => entry.effect === "deny")).toBe(true);
+
+    const onlyMcp = await run(["policy", ...base, "--deny-unlisted", "--include", "mcp"]);
+    const mcpPolicies = JSON.parse(onlyMcp.stdout) as {
+      policies: Array<{ action: string; effect: string }>;
+    };
+    expect(mcpPolicies.policies.every((entry) => entry.action === "mcp.use")).toBe(true);
+  });
+
+  test("policy resolves relative plugin targets and allows itself", async () => {
+    const { directory, home } = await project();
+    await localPlugin(directory);
+    await writeJson(join(directory, "opencode.json"), {
+      plugins: ["./plugins/demo-plugin"],
+    });
+    const result = await run([
+      "policy",
+      "--directory",
+      directory,
+      "--home",
+      home,
+      "--deny-unlisted",
+      "--include",
+      "plugins",
+    ]);
+    const parsed = JSON.parse(result.stdout) as {
+      policies: Array<{ action: string; resource: string; effect: string }>;
+    };
+    expect(parsed.policies).toContainEqual({
+      action: "plugin.use",
+      resource: join(directory, "plugins", "demo-plugin"),
+      effect: "allow",
+    });
+    expect(parsed.policies).toContainEqual({
+      action: "plugin.use",
+      resource: "@hamzaabili/opencode-integrity",
+      effect: "allow",
+    });
+  });
+
+  test("policy resolves lock-only local plugins against the project", async () => {
+    const { directory, home } = await project();
+    await localPlugin(directory);
+    await writeJson(join(directory, "opencode.json"), {
+      plugins: ["./plugins/demo-plugin"],
+    });
+    const base = ["--directory", directory, "--home", home];
+    expect((await run(["lock", ...base])).code).toBe(0);
+    await writeJson(join(directory, "opencode.json"), {});
+    const result = await run(["policy", ...base, "--deny-unlisted", "--include", "plugins"]);
+    const parsed = JSON.parse(result.stdout) as {
+      policies: Array<{ action: string; resource: string; effect: string }>;
+    };
+    expect(parsed.policies).toContainEqual({
+      action: "plugin.use",
+      resource: join(directory, "plugins", "demo-plugin"),
+      effect: "allow",
+    });
   });
 
   test("check fails when the lockfile is missing", async () => {

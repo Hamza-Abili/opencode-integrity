@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { parseOptions } from "../src/options.ts";
 import {
@@ -8,7 +9,7 @@ import {
   inspectRuntime,
   lockRuntime,
 } from "../src/runtime.ts";
-import { localPlugin, project, writeJson, writeText } from "./helpers.ts";
+import { localPlugin, project, tempDir, writeJson, writeText } from "./helpers.ts";
 
 async function fixture(description = "search docs") {
   const { directory, home } = await project();
@@ -84,6 +85,25 @@ describe("collectRuntime", () => {
     };
     await collectRuntime(ctx, directory, home, { include: ["mcp"], includeGlobal: false });
     expect(pluginCalls).toBe(0);
+  });
+
+  test("matches project keys through a symlinked directory", async () => {
+    const { directory, home } = await project();
+    const plugin = await localPlugin(directory);
+    await writeJson(join(directory, "opencode.json"), {
+      plugins: ["./plugins/demo-plugin"],
+    });
+    const parent = await tempDir("oi-link-");
+    const linked = join(parent, "project");
+    await symlink(directory, linked);
+    const ctx = {
+      app: { version: "2.2.6" },
+      plugin: {
+        list: async () => ({ data: [{ source: { type: "local", path: plugin } }] }),
+      },
+    };
+    const snapshot = await collectRuntime(ctx, linked, home);
+    expect(Object.keys(snapshot.assets.plugins)).toEqual(["./plugins/demo-plugin"]);
   });
 
   test("detects changes in non-SKILL.md skill files", async () => {

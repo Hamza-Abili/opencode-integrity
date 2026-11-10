@@ -1,13 +1,14 @@
 import { mcpConfigAsset, pluginAsset, scanSkills } from "./assets.ts";
-import { loadGlobalMcp, loadProjectConfig } from "./config.ts";
+import { loadGlobalMcp, loadProjectConfig, localPluginTarget, pluginAssetKey } from "./config.ts";
 import { audit, formatDrift, severityCounts } from "./lockfile.ts";
 import type { AssetKind, Assets, AuditResult, DriftEntry, Lockfile, Options } from "./types.ts";
-import { ignored } from "./util.ts";
+import { ignored, realPath } from "./util.ts";
 
 export interface StaticAudit {
   readonly assets: Assets;
   readonly warnings: readonly string[];
   readonly files: readonly string[];
+  readonly policyTargets: ReadonlyMap<string, readonly string[]>;
 }
 
 export function filterAssets(assets: Assets, include: readonly AssetKind[]): Assets {
@@ -27,7 +28,7 @@ export async function collectStaticAssets(
   const warnings = [...config.warnings];
   const plugins: Record<string, Assets["plugins"][string]> = {};
   for (const ref of config.plugins) {
-    const id = ref.target;
+    const id = pluginAssetKey(ref, directory);
     const result = await pluginAsset(id, ref, directory, home);
     if (result.asset !== undefined) plugins[id] = result.asset;
     if (result.warning !== undefined) warnings.push(result.warning);
@@ -41,11 +42,20 @@ export async function collectStaticAssets(
     const asset = mcpConfigAsset(name, value);
     if (asset !== undefined) mcp[name] = asset;
   }
+  const policyTargets = new Map<string, readonly string[]>();
+  for (const ref of config.plugins) {
+    const id = pluginAssetKey(ref, directory);
+    const target = localPluginTarget(ref, directory);
+    if (target === undefined) continue;
+    const real = realPath(target);
+    policyTargets.set(id, real === target ? [target] : [target, real]);
+  }
   const include = options?.include ?? ["plugins", "mcp", "skills"];
   return {
     assets: filterAssets({ plugins, mcp, skills: await scanSkills(directory) }, include),
     warnings,
     files: config.files,
+    policyTargets,
   };
 }
 

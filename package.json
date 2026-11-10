@@ -1,6 +1,6 @@
 {
   "name": "@hamzaabili/opencode-integrity",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Lock what your OpenCode agent can load: MCP tool definitions, skills and plugins. Detect drift, tool poisoning and rug pulls at runtime. Zero runtime dependencies, V1+V2.",
   "type": "module",
   "license": "MIT",

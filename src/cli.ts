@@ -19,6 +19,7 @@ import {
 import { parseOptions } from "./options.ts";
 import { generatePolicy } from "./policy.ts";
 import { toSarif } from "./sarif.ts";
+import { realPath } from "./util.ts";
 import { VERSION } from "./version.ts";
 
 type Command = "audit" | "lock" | "check" | "diff" | "policy" | "version";
@@ -32,6 +33,8 @@ interface Args {
   strict: boolean;
   ignore: string[];
   includeGlobal: boolean;
+  denyUnlisted: boolean;
+  include?: string;
 }
 
 function parseArgs(argv: readonly string[]): Args {
@@ -43,6 +46,7 @@ function parseArgs(argv: readonly string[]): Args {
     strict: false,
     ignore: [],
     includeGlobal: false,
+    denyUnlisted: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index] ?? "";
@@ -82,6 +86,12 @@ function parseArgs(argv: readonly string[]): Args {
       case "--include-global":
         output.includeGlobal = true;
         break;
+      case "--deny-unlisted":
+        output.denyUnlisted = true;
+        break;
+      case "--include":
+        output.include = next();
+        break;
       case "--version":
       case "-v":
         output.command = "version";
@@ -110,6 +120,8 @@ function usage(): string {
     "  --strict                audit exits 1 on drift or an unlocked project",
     "  --ignore <pattern>      ignore an asset id (repeatable)",
     "  --include-global        include global MCP config (runtime also plugins/skills)",
+    "  --deny-unlisted         policy: prepend deny * so the output is a real allowlist",
+    "  --include <classes>     policy: comma-separated plugins,mcp,skills",
   ].join("\n");
 }
 
@@ -128,6 +140,10 @@ async function main(): Promise<number> {
     {
       lockfile: args.lockfile,
       ignore: args.ignore,
+      include:
+        args.command === "policy" && args.include !== undefined
+          ? args.include.split(",")
+          : undefined,
       includeGlobal: args.includeGlobal,
       mode: "warn",
     },
@@ -166,7 +182,24 @@ async function main(): Promise<number> {
 
   if (args.command === "policy") {
     const assets = previous?.assets ?? current.assets;
-    console.log(JSON.stringify(generatePolicy(assets), null, 2));
+    console.log(
+      JSON.stringify(
+        generatePolicy(assets, {
+          denyUnlisted: args.denyUnlisted,
+          include: options.include,
+          resolvePlugin: (source) => {
+            const targets = current.policyTargets.get(source);
+            if (targets !== undefined) return targets;
+            if (source !== "." && !source.startsWith("./")) return source;
+            const target = resolve(args.directory, source);
+            const real = realPath(target);
+            return real === target ? [target] : [target, real];
+          },
+        }),
+        null,
+        2
+      )
+    );
     return 0;
   }
 

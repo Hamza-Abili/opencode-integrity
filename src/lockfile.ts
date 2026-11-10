@@ -1,6 +1,7 @@
 import type { Assets, AuditResult, DriftEntry, Lockfile } from "./types.ts";
 import { SCHEMA_VERSION } from "./types.ts";
 import { readJsonFile, stableStringify, writeFileAtomic } from "./util.ts";
+import { VERSION } from "./version.ts";
 
 function sortRecord<T>(value: Readonly<Record<string, T>>): Record<string, T> {
   return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)));
@@ -21,7 +22,7 @@ function sortAssets(assets: Assets): Assets {
   };
 }
 
-export function createLockfile(assets: Assets, opencode?: string, version = "0.1.0"): Lockfile {
+export function createLockfile(assets: Assets, opencode?: string, version = VERSION): Lockfile {
   return {
     schemaVersion: SCHEMA_VERSION,
     generatedBy: `opencode-integrity@${version}`,

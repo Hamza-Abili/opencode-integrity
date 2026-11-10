@@ -1,10 +1,13 @@
-import { join } from "node:path";
-import { isDirectory, pathExists, readJsoncFile } from "./util.ts";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import { isDirectory, isInside, pathExists, readJsoncFile, realPath } from "./util.ts";
 
 export interface PluginRef {
   readonly target: string;
   readonly version?: string;
   readonly localPath?: string;
+  /** Directory of the config file that declared this plugin. */
+  readonly configDir?: string;
 }
 
 export interface ProjectConfig {
@@ -86,7 +89,7 @@ export async function loadProjectConfig(directory: string): Promise<ProjectConfi
     ];
     for (const value of values) {
       const ref = pluginRef(value);
-      if (ref !== undefined) plugins.push(ref);
+      if (ref !== undefined) plugins.push({ ...ref, configDir: dirname(path) });
     }
     Object.assign(mcp, mcpFromConfig(data));
   }
@@ -113,11 +116,40 @@ export async function loadProjectConfig(directory: string): Promise<ProjectConfi
   return { files, plugins: dedupe(plugins), mcp, warnings };
 }
 
+/** Absolute path for a local plugin, or undefined for a package target. */
+export function localPluginTarget(ref: PluginRef, directory: string): string | undefined {
+  const target = ref.localPath ?? ref.target;
+  if (target.startsWith("file://")) {
+    try {
+      return fileURLToPath(target);
+    } catch {
+      return undefined;
+    }
+  }
+  if (isAbsolute(target)) return target;
+  if (target.startsWith("./") || target.startsWith("../")) {
+    return resolve(ref.configDir ?? directory, target);
+  }
+  return undefined;
+}
+
+/** Stable lockfile key: project-relative for local paths, raw target for packages. */
+export function pluginAssetKey(ref: PluginRef, directory: string): string {
+  const local = localPluginTarget(ref, directory);
+  if (local === undefined) return ref.target;
+  const realDirectory = realPath(directory);
+  const realLocal = realPath(local);
+  if (!isInside(realDirectory, realLocal)) return local;
+  const path = relative(realDirectory, realLocal).split(sep).join("/");
+  return path.length === 0 ? "." : `./${path}`;
+}
+
 function dedupe(values: readonly PluginRef[]): PluginRef[] {
   const seen = new Set<string>();
   return values.filter((value) => {
-    if (seen.has(value.target)) return false;
-    seen.add(value.target);
+    const key = `${value.configDir ?? ""}\u0000${value.target}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
 }

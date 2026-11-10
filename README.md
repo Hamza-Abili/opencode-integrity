@@ -118,7 +118,7 @@ npx @hamzaabili/opencode-integrity audit [--json] [--strict]
 npx @hamzaabili/opencode-integrity lock
 npx @hamzaabili/opencode-integrity check [--format text|json|sarif]
 npx @hamzaabili/opencode-integrity diff
-npx @hamzaabili/opencode-integrity policy
+npx @hamzaabili/opencode-integrity policy [--deny-unlisted] [--include plugins,mcp,skills]
 ```
 
 - `check` exits `1` on drift or when no lockfile exists.
@@ -127,8 +127,17 @@ npx @hamzaabili/opencode-integrity policy
   `integrity_status` tool inside OpenCode for the full check.
 - `audit --strict` exits `1` on drift or an unlocked project.
 - `policy` emits native OpenCode `mcp.use`, `skill.use` and `plugin.use`
-  allow statements from the lockfile. It is an allowlist, not a hash check;
-  pair it with `check`/runtime enforcement.
+  statements from the lockfile. Policies default to allow, so allow statements
+  alone restrict nothing. `--deny-unlisted` prepends `deny *` for each included
+  class, producing a real allowlist; review it because it also blocks global or
+  newly added assets. A `plugin.use` deny keeps
+  `@hamzaabili/opencode-integrity` allowed by package name so the runtime plugin
+  is not blocked by its own policy; an absolute-path install needs an explicit
+  allow. Local `./`/`../` plugin targets are resolved against the
+  config file directory, like OpenCode does. OpenCode's built-in `opencode` and
+  `report` skills are not in the lock, so `skill.use deny *` also hides them;
+  add explicit allows if you need them. `--include` applies to `policy` only.
+  It is not a hash check; pair it with `check`/runtime enforcement.
 
 ## Options
 

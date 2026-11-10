@@ -1,8 +1,8 @@
 import type { Dirent } from "node:fs";
 import { readdir, realpath } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
-import type { PluginRef } from "./config.ts";
+import { basename, dirname, join, relative, resolve } from "node:path";
+import { localPluginTarget, type PluginRef } from "./config.ts";
 import type { McpAsset, McpToolAsset, PluginAsset, SkillAsset } from "./types.ts";
 import {
   detectCapabilities,
@@ -70,17 +70,14 @@ async function walkUpToPackage(start: string): Promise<string | undefined> {
 /** Resolve a package or local plugin reference to its installed root. */
 export async function resolvePluginRoot(
   ref: PluginRef,
-  directory: string,
-  home: string
+  directory: string
 ): Promise<string | undefined> {
-  const target = ref.localPath ?? ref.target;
-  if (isAbsolute(target) || target.startsWith(".") || target.startsWith("~/")) {
-    const expanded = target.startsWith("~")
-      ? resolve(home, target.slice(2))
-      : resolve(directory, target);
-    if (await isDirectory(expanded)) return expanded;
-    return await walkUpToPackage(dirname(expanded));
+  const local = localPluginTarget(ref, directory);
+  if (local !== undefined) {
+    if (await isDirectory(local)) return local;
+    return await walkUpToPackage(dirname(local));
   }
+  const target = ref.target;
   const direct = join(directory, "node_modules", target);
   if (await isDirectory(direct)) return direct;
   try {
@@ -125,10 +122,10 @@ export async function pluginAsset(
   id: string,
   ref: PluginRef,
   directory: string,
-  home: string,
+  _home: string,
   allowOutside = false
 ): Promise<{ asset?: PluginAsset; warning?: string }> {
-  const root = await resolvePluginRoot(ref, directory, home);
+  const root = await resolvePluginRoot(ref, directory);
   if (root === undefined) {
     return {
       warning: `${id}: package not installed (${ref.target}); run the package manager first`,
@@ -146,7 +143,7 @@ export async function pluginAsset(
   const text = await entryText(root, realRoot);
   return {
     asset: {
-      source: ref.target,
+      source: id,
       version,
       packageHash: hashObject(manifest ?? {}),
       contentHash: content.hash,
@@ -302,16 +299,6 @@ export async function skillAssetFromInfo(
       suspicious: detectSuspicious(skill.content),
     },
   ];
-}
-
-export function pluginIDFromRuntime(plugin: unknown): string | undefined {
-  if (!isObject(plugin)) return undefined;
-  if (typeof plugin.id === "string") return plugin.id;
-  const source = plugin.source;
-  if (!isObject(source)) return undefined;
-  if (source.type === "local" && typeof source.path === "string") return source.path;
-  if (source.type === "package" && typeof source.target === "string") return source.target;
-  return undefined;
 }
 
 export function mcpToolsForServer(

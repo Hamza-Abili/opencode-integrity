@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { Dirent } from "node:fs";
+import { type Dirent, realpathSync } from "node:fs";
 import {
   mkdir,
   readdir,
@@ -111,6 +111,19 @@ export function hashObject(value: unknown): string {
 export function isInside(parent: string, child: string): boolean {
   const rel = relative(resolve(parent), resolve(child));
   return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel));
+}
+
+/** Resolve symlinks when possible; fall back to the lexical path. */
+export function realPath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+export function isInsideReal(parent: string, child: string): boolean {
+  return isInside(realPath(parent), realPath(child));
 }
 
 export interface DirectoryHash {
