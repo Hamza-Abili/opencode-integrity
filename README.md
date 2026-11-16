@@ -197,6 +197,11 @@ Read [SECURITY.md](SECURITY.md) before enabling `enforce` on a shared machine.
 ```sh
 bun install
 bun run ci        # biome + tsc + tests + build + smoke
+bun run compat    # ci + live smoke against a real OpenCode binary
 ```
+
+`bun run compat` starts an ephemeral `opencode serve` in an isolated
+HOME/XDG, so it needs an OpenCode binary on `PATH` (`OPENCODE_BIN=/path`
+overrides it) and no model or API key.
 
 MIT. Zero runtime dependencies.
